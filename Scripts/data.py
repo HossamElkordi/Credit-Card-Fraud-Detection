@@ -1,14 +1,18 @@
 import os
+import gc
 import math
+import torch
 import joblib
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import dask.dataframe as dd
 from Scripts.vocab import Vocabulary
 from Scripts.utils import divide_chunks
+from torch.utils.data.dataset import Dataset
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 
-class Data:
+class Data(Dataset):
     def __init__(self, data_dir='./Data', model_dir='./Models', seq_len=10, stride=5, nbins=10, adap_threshold=10**8, return_labels=False, skip_user=False, flatten=False):
         self.data_dir = data_dir
         self.model_dir = model_dir
@@ -29,20 +33,56 @@ class Data:
         self.prepare_samples()
         self.save_vocab()
 
+    def __getitem__(self, index):
+        if self.flatten:
+            return_data = torch.tensor(self.data[index], dtype=torch.long)
+        else:
+            return_data = torch.tensor(self.data[index], dtype=torch.long).reshape(self.seq_len, -1)
+
+        if self.return_labels:
+            return_data = (return_data, torch.tensor(self.labels[index], dtype=torch.long))
+
+        return return_data
+
+    def __len__(self):
+        return len(self.data)
+
     def encode_data(self):
         data_prep_path = os.path.join(self.model_dir, 'data_prep.pkl')
+        num8_cols = ['Card', 'Timestamp', 'Amount', 'Use Chip', 'Merchant State', 'MCC', 'Errors?', 'Is Fraud?']
+        num16_cols = ['User', 'Merchant City']
+        num32_cols = ['Merchant Name', 'Zip']
+
+        dtypes = {}
+        for c in num8_cols:
+          dtypes[c] = 'int8'
+
+        for c in num16_cols:
+          dtypes[c] = 'int16'
+
+        for c in num32_cols:
+          dtypes[c] = 'int32'
+
         if os.path.exists(data_prep_path):
-            self.trans_data = pd.read_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'))
+            self.trans_data = pd.read_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'), dtype = dtypes)
             self.data_prep_models = joblib.load(data_prep_path)
             return
         
         df = pd.read_csv(os.path.join(self.data_dir, 'transactions.csv'))
-        df['Errors?'] = self.nanNone(df['Errors?'])
-        df['Is Fraud?'] = self.fraudEncoder(df['Is Fraud?'])
-        df['Zip'] = self.nanZero(df['Zip'])
-        df['Merchant State'] = self.nanNone(df['Merchant State'])
-        df['Use Chip'] = self.nanNone(df['Use Chip'])
-        df['Amount'] = self.amountEncoder(df['Amount'])
+
+        df['Zip'] = df['Zip'].fillna(0).astype(int)
+        num8_col = ['Card', 'Month', 'Day']
+        num16_col = ['User', 'Year']
+        cat_col = ['Time', 'Amount', 'Use Chip', 'Merchant Name', 'Merchant City', 
+                    'Merchant State', 'Zip', 'MCC', 'Errors?', 'Is Fraud?']
+        df[num8_col] = df[num8_col].astype('int8')
+        df[num16_col] = df[num16_col].astype('int16')
+        df[cat_col] = df[cat_col].astype('category')
+        df['Amount'] = df['Amount'].apply(lambda x: x[1:]).astype(float).apply(lambda amt: max(1, amt)).apply(math.log)
+        df['Errors?'] = df['Errors?'].cat.add_categories('None').fillna('None')
+        df['Is Fraud?'] = df['Is Fraud?'].cat.rename_categories([0, 1]).astype('int8')
+        df['Merchant State'] = df['Merchant State'].cat.add_categories('None').fillna('None')
+        df['Use Chip'] = df['Use Chip'].cat.add_categories('None').fillna('None')
 
         sub_columns = ['Errors?', 'MCC', 'Zip', 'Merchant State', 'Merchant City', 'Merchant Name', 'Use Chip']
         for col_name in tqdm(sub_columns, desc='Label Encoding'):
@@ -67,11 +107,12 @@ class Data:
         self.data_prep_models["Amount-Quant"] = [bin_edges, bin_centers, bin_widths]
 
         columns_to_select = ['User', 'Card', 'Timestamp', 'Amount', 'Use Chip', 'Merchant Name', 'Merchant City', 'Merchant State', 'Zip', 'MCC', 'Errors?', 'Is Fraud?']
-        self.trans_data = df[columns_to_select]
 
         joblib.dump(self.data_prep_models, data_prep_path)
-        self.trans_data.to_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'), index=False)
+        df[columns_to_select].to_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'), index=False)
         del df
+        gc.collect()
+        self.trans_data = pd.read_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'), dtype=dtypes)
 
     def init_vocab(self):
         column_names = list(self.trans_data.columns)
@@ -94,7 +135,8 @@ class Data:
     def prepare_samples(self):
         trans_data, trans_labels, columns_names = self.user_level_data()
         del self.trans_data
-        for user_idx in tqdm(len(trans_data), desc='Prepare Samples'):
+        gc.collect()
+        for user_idx in tqdm(range(len(trans_data)), desc='Prepare Samples'):
             user_row = trans_data[user_idx]
             user_row_ids = self.format_trans(user_row, columns_names)
             user_labels = trans_labels[user_idx]
@@ -102,7 +144,7 @@ class Data:
                 ids = user_row_ids[jdx:(jdx + self.seq_len)]
                 ids = [idx for ids_lst in ids for idx in ids_lst]
                 self.data.append(ids)
-            for jdx in range(0, len(user_labels) - self.seq_len + 1, self.trans_stride):
+            for jdx in range(0, len(user_labels) - self.seq_len + 1, self.stride):
                 ids = user_labels[jdx:(jdx + self.seq_len)]
                 self.labels.append(ids)
                 fraud = 0
@@ -112,7 +154,8 @@ class Data:
         del trans_data
         del trans_labels
         del columns_names
-        self.ncols = len(self.vocab.field_keys) - 2 + (1 if self.mlm else 0)
+        gc.collect()
+        self.ncols = len(self.vocab.field_keys) - 2 + 1
             
 
     def format_trans(self, trans_lst, column_names):
@@ -127,8 +170,7 @@ class Data:
                 vocab_id = self.vocab.get_id(field, column_names[jdx])
                 vocab_ids.append(vocab_id)
 
-            if self.mlm:
-                vocab_ids.append(sep_id)
+            vocab_ids.append(sep_id)
 
             user_vocab_ids.append(vocab_ids)
 
@@ -140,9 +182,7 @@ class Data:
         columns_names = list(self.trans_data.columns)
 
         for user in tqdm(unique_users, desc='User Transactions'):
-            cond = self.trans_data['User'] == user
-            user_data = self.trans_data[cond]
-            self.trans_data.drop(cond, axis=0, inplace=True)
+            user_data = self.trans_data[self.trans_data['User'] == user]
 
             user_trans, user_labels = [], []
             for _, row in user_data.iterrows():
@@ -177,12 +217,12 @@ class Data:
     def timeEncoder(X):
         X_hm = X['Time'].str.split(':', expand=True)
         d = pd.to_numeric(pd.to_datetime(dict(year=X['Year'], month=X['Month'], day=X['Day'], hour=X_hm[0], minute=X_hm[1]))).astype(int)
-        return pd.DataFrame(d)
+        return d
 
     @staticmethod
     def amountEncoder(X):
         amt = X.apply(lambda x: x[1:]).astype(float).apply(lambda amt: max(1, amt)).apply(math.log)
-        return pd.DataFrame(amt)
+        return amt
 
     @staticmethod
     def fraudEncoder(X):
