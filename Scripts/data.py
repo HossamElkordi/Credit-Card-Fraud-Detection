@@ -39,9 +39,9 @@ class Data(Dataset):
         user_id, window_id = self.data[index]
         if user_id != self.current_id:
             self.current_id = user_id
-            self.current_user_data = os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl')
+            self.current_user_data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
             if self.return_labels:
-                self.current_user_label = os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl')
+                self.current_user_label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
         
         if self.flatten:
             return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long)
@@ -190,9 +190,9 @@ class Data(Dataset):
                     label_dict[global_id] = ids
                     global_id += 1
                     self.data.append([user_idx, global_id])
-                user_idx += 1
                 joblib.dump(user_dict, os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{user_idx}.pkl'))
                 joblib.dump(label_dict, os.path.join(self.data_dir, f'PreProcessed/User_Labels/{user_idx}.pkl'))
+                user_idx += 1
                 pbar.update()
         del trans_data
         del trans_labels
