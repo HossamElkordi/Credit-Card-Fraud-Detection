@@ -33,6 +33,7 @@ class Data(Dataset):
         self.encode_data()
         self.init_vocab()
         self.prepare_samples()
+        self.save_vocab()
 
     def __getitem__(self, index):
         user_id, window_id = self.data[index]
@@ -149,6 +150,10 @@ class Data(Dataset):
                 self.vocab.adap_sm_cols.add(column)
         joblib.dump(self.vocab, vocab_path)
 
+    def save_vocab(self):
+        file_name = os.path.join(self.model_dir, 'vocab.nb')
+        self.vocab.save_vocab(file_name)
+
     def prepare_samples(self):
         trans_path = os.path.join(self.model_dir, 'trans_data.pkl')
         data_path = os.path.join(self.data_dir, f'PreProcessed/data.pkl')
@@ -168,10 +173,10 @@ class Data(Dataset):
         if not os.path.exists(os.path.join(self.data_dir, f'PreProcessed/User_Labels')):
             os.mkdir(os.path.join(self.data_dir, f'PreProcessed/User_Labels'))
 
-        global_id = 0
         user_idx = 0
         with tqdm(total=len(trans_data)) as pbar:
             while len(trans_data) > 0:
+                global_id = 0
                 user_dict = {}
                 label_dict = {}
                 user_row = trans_data.pop(0)

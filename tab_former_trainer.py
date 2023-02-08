@@ -24,6 +24,8 @@ def get_args():
     parser.add_argument("--return_labels", action='store_true')
     parser.add_argument("--skip_user", action='store_true')
     parser.add_argument("--flatten", action='store_true')
+    parser.add_argument("--do_train", action='store_true')
+    parser.add_argument("--do_eval", action='store_true')
     return parser.parse_args()
 
 
@@ -62,7 +64,7 @@ def main(args):
         special_tokens=custom_special_tokens,
         vocab=vocab,
         ncols=dataset.ncols,
-        field_hidden_size=args.fieled_hs
+        field_hidden_size=args.field_hs
     )
 
     if args.flatten:
@@ -72,15 +74,19 @@ def main(args):
     
     data_collator = collactor_cls(tokenizer=model.tokenizer, mlm=True, mlm_probability=args.mlm_prob)
 
+    model_path = os.path.join(args.model_dir, 'checkpoints')
     training_args = TrainingArguments(
-        output_dir=args.model_dir,
+        output_dir=model_path,
         num_train_epochs=args.epochs,
-        save_steps=args.save_steps,
+        save_steps=args.save_step,
         do_train=args.do_train,
         do_eval=args.do_eval,
-        evaluation_strategy="epoch",
+        evaluation_strategy="steps",
         prediction_loss_only=True,
         overwrite_output_dir=True,
+        optim='adamw_torch',
+        disable_tqdm=False,
+        load_best_model_at_end=True
     )
     trainer = Trainer(
         model=model.model,
@@ -88,10 +94,8 @@ def main(args):
         data_collator=data_collator,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        callbacks=[ProgressCallback]
     )
-    model_path = os.path.join(args.output_dir, 'checkpoints')
-    trainer.train(model_path=model_path)
+    trainer.train()
 
 if __name__ == '__main__':
     args = get_args()
