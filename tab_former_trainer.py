@@ -4,7 +4,7 @@ import random
 import argparse
 import numpy as np
 from Scripts.data import Data
-from Scripts.models import TabFormerBertLM
+from Scripts.tabformer_models import TabFormerBertLM
 from Scripts.utils import random_split_dataset
 from Scripts.datacollator import TransDataCollatorForLanguageModeling
 from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments, ProgressCallback

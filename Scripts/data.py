@@ -155,7 +155,7 @@ class Data(Dataset):
         self.vocab.save_vocab(file_name)
 
     def prepare_samples(self):
-        trans_path = os.path.join(self.model_dir, 'trans_data.pkl')
+        trans_path = os.path.join(self.data_dir, 'trans_data.pkl')
         data_path = os.path.join(self.data_dir, f'PreProcessed/data.pkl')
         
         if os.path.exists(data_path):
