@@ -92,3 +92,7 @@ def main(args):
     )
     model_path = os.path.join(args.output_dir, 'checkpoints')
     trainer.train(model_path=model_path)
+
+if __name__ == '__main__':
+    args = get_args()
+    main(args)
