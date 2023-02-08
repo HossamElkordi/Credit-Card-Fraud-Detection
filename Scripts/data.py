@@ -31,7 +31,6 @@ class Data(Dataset):
         self.encode_data()
         self.init_vocab()
         self.prepare_samples()
-        self.save_vocab()
 
     def __getitem__(self, index):
         if self.flatten:
@@ -48,6 +47,8 @@ class Data(Dataset):
         return len(self.data)
 
     def encode_data(self):
+        if os.path.exists(os.path.join(self.data_dir, f'PreProcessed/data.pkl')):
+            return
         data_prep_path = os.path.join(self.model_dir, 'data_prep.pkl')
         num8_cols = ['Card', 'Timestamp', 'Amount', 'Use Chip', 'Merchant State', 'MCC', 'Errors?', 'Is Fraud?']
         num16_cols = ['User', 'Merchant City']
@@ -115,6 +116,12 @@ class Data(Dataset):
         self.trans_data = pd.read_csv(os.path.join(self.data_dir, 'PreProcessed/transactions.csv'), dtype=dtypes)
 
     def init_vocab(self):
+        vocab_path = os.path.join(self.model_dir, 'vocab.pkl')
+        
+        if os.path.exists(vocab_path):
+            self.vocab = joblib.load(vocab_path)
+            return
+        
         column_names = list(self.trans_data.columns)
         if self.skip_user:
             column_names.remove("User")
@@ -131,31 +138,54 @@ class Data(Dataset):
             
             if vocab_size > self.vocab.adap_thres:
                 self.vocab.adap_sm_cols.add(column)
+        joblib.dump(self.vocab, vocab_path)
 
     def prepare_samples(self):
-        trans_data, trans_labels, columns_names = self.user_level_data()
-        del self.trans_data
-        gc.collect()
-        for user_idx in tqdm(range(len(trans_data)), desc='Prepare Samples'):
-            user_row = trans_data[user_idx]
-            user_row_ids = self.format_trans(user_row, columns_names)
-            user_labels = trans_labels[user_idx]
-            for jdx in range(0, len(user_row_ids) - self.seq_len + 1, self.stride):
-                ids = user_row_ids[jdx:(jdx + self.seq_len)]
-                ids = [idx for ids_lst in ids for idx in ids_lst]
-                self.data.append(ids)
-            for jdx in range(0, len(user_labels) - self.seq_len + 1, self.stride):
-                ids = user_labels[jdx:(jdx + self.seq_len)]
-                self.labels.append(ids)
-                fraud = 0
-                if len(np.nonzero(ids)[0]) > 0:
-                    fraud = 1
-                self.window_label.append(fraud)
+        trans_path = os.path.join(self.model_dir, 'trans_data.pkl')
+        data_path = os.path.join(self.data_dir, f'PreProcessed/data.pkl')
+        
+        if os.path.exists(data_path):
+            self.data = joblib.load(data_path)
+            self.ncols = len(self.vocab.field_keys) - 2 + 1
+            return
+        if os.path.exists(trans_path):
+            trans_data, trans_labels, columns_names = joblib.load(trans_path)
+        else:
+            trans_data, trans_labels, columns_names = self.user_level_data()
+            joblib.dump([trans_data, trans_labels, columns_names], trans_path)
+        
+        if not os.path.exists(os.path.join(self.data_dir, f'PreProcessed/User_Transactions')):
+            os.mkdir(os.path.join(self.data_dir, f'PreProcessed/User_Transactions'))
+        if not os.path.exists(os.path.join(self.data_dir, f'PreProcessed/User_Labels')):
+            os.mkdir(os.path.join(self.data_dir, f'PreProcessed/User_Labels'))
+
+        global_id = 0
+        user_idx = 0
+        with tqdm(total=len(trans_data)) as pbar:
+            while len(trans_data) > 0:
+                user_dict = {}
+                label_dict = {}
+                user_row = trans_data.pop(0)
+                user_row_ids = self.format_trans(user_row, columns_names)
+                user_labels = trans_labels.pop(0)
+                for jdx in range(0, len(user_row_ids) - self.seq_len + 1, self.stride):
+                    ids = user_row_ids[jdx:(jdx + self.seq_len)]
+                    ids = [idx for ids_lst in ids for idx in ids_lst]
+                    user_dict[global_id] = ids
+                    ids = user_labels[jdx:(jdx + self.seq_len)]
+                    label_dict[global_id] = ids
+                    global_id += 1
+                    self.data.append([user_idx, global_id])
+                user_idx += 1
+                joblib.dump(user_dict, os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{user_idx}.pkl'))
+                joblib.dump(label_dict, os.path.join(self.data_dir, f'PreProcessed/User_Labels/{user_idx}.pkl'))
+                pbar.update()
         del trans_data
         del trans_labels
         del columns_names
         gc.collect()
         self.ncols = len(self.vocab.field_keys) - 2 + 1
+        joblib.dump(self.data, data_path)
             
 
     def format_trans(self, trans_lst, column_names):
@@ -198,10 +228,6 @@ class Data(Dataset):
             columns_names.remove("User")
 
         return trans_data, trans_labels, columns_names
-
-    def save_vocab(self):
-        file_name = os.path.join(self.model_dir, 'vocab.nb')
-        self.vocab.save_vocab(file_name)
 
     @staticmethod
     def label_fit_transform(column, enc_type="label"):

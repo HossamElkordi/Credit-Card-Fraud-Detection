@@ -7,7 +7,7 @@ from Scripts.data import Data
 from Scripts.models import TabFormerBertLM
 from Scripts.utils import random_split_dataset
 from Scripts.datacollator import TransDataCollatorForLanguageModeling
-from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments
+from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments, ProgressCallback
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -88,6 +88,7 @@ def main(args):
         data_collator=data_collator,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
+        callbacks=[ProgressCallback]
     )
     model_path = os.path.join(args.output_dir, 'checkpoints')
     trainer.train(model_path=model_path)
