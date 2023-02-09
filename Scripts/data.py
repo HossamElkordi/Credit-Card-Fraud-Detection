@@ -59,35 +59,11 @@ class Data():
         self.data = []
         self.labels = []
         self.window_label = []
-        self.current_id = -1
-        self.current_user_data = None
-        self.current_user_label = None
         self.vocab = Vocabulary(adap_thres=adap_threshold)
         self.encode_data()
         self.init_vocab()
         self.prepare_samples()
         self.save_vocab()
-
-    def __getitem__(self, index):
-        user_id, window_id = self.data[index]
-        if user_id != self.current_id:
-            self.current_id = user_id
-            self.current_user_data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
-            if self.return_labels:
-                self.current_user_label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
-        
-        if self.flatten:
-            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long)
-        else:
-            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long).reshape(self.seq_len, -1)
-
-        if self.return_labels:
-            return_data = (return_data, torch.tensor(self.current_user_label[window_id], dtype=torch.long))
-
-        return return_data
-
-    def __len__(self):
-        return len(self.data)
 
     def encode_data(self):
         if os.path.exists(os.path.join(self.data_dir, f'PreProcessed/data.pkl')):
