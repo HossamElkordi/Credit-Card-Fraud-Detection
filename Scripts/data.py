@@ -13,8 +13,11 @@ from torch.utils.data.dataset import Dataset
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 
 class TransactionData(Dataset):
-    def __init__(self, data_list, data_dir, seq_len, flatten, return_labels) -> None:
+    def __init__(self, data_list, data_dir, seq_len, flatten, return_labels, load_all=False) -> None:
         super().__init__()
+        self.data_dict = {}
+        self.label_dict = {}
+        self.load_all = load_all
         self.data_dir = data_dir
         self.flatten = flatten
         self.return_labels = return_labels
@@ -23,24 +26,49 @@ class TransactionData(Dataset):
         self.current_id = -1
         self.current_user_data = None
         self.current_user_label = None
+        if self.load_all:
+            cur = -1
+            data = None
+            if self.return_labels:
+                label = None
+            for u_id, w_id in self.data:
+                if u_id != cur:
+                    data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
+                    if self.return_labels:
+                        label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
+                if u_id not in self.data_dict.keys():
+                    self.data_dict[u_id] = {}
+                self.data_dict[u_id][w_id] = data[w_id - 1]
+                if self.return_labels:
+                    if u_id not in self.label_dict.keys():
+                        self.label_dict[u_id] = {}
+                    self.label_dict[u_id][w_id] = label[w_id - 1]
+
 
     def __getitem__(self, index):
         user_id, window_id = self.data[index]
-        if user_id != self.current_id:
+        if not self.load_all and user_id != self.current_id:
             self.current_id = user_id
             self.current_user_data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
             if self.return_labels:
                 self.current_user_label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
         
+        if self.load_all:
+            return_data = self.data_dict[user_id][window_id]
+        else:
+            return_data = self.current_user_data[window_id-1]
         if self.flatten:
-            return_data = torch.tensor(self.current_user_data[window_id-1], dtype=torch.long)
+            return_data = torch.tensor(return_data, dtype=torch.long)
         else:
             try:
-                return_data = torch.tensor(self.current_user_data[window_id-1], dtype=torch.long).reshape(self.seq_len, -1)
+                return_data = torch.tensor(return_data, dtype=torch.long).reshape(self.seq_len, -1)
             except:
                 print(window_id, user_id)
         if self.return_labels:
-            return_data = (return_data, torch.tensor(self.current_user_label[window_id-1], dtype=torch.long))
+            if self.load_all:
+                return_data = (return_data, torch.tensor(self.label_dict[user_id][window_id], dtype=torch.long))
+            else:
+                return_data = (return_data, torch.tensor(self.current_user_label[window_id-1], dtype=torch.long))
 
         return return_data
 

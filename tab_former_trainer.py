@@ -27,6 +27,7 @@ def get_args():
     parser.add_argument("--flatten", action='store_true')
     parser.add_argument("--do_train", action='store_true')
     parser.add_argument("--do_eval", action='store_true')
+    parser.add_argument("--load_all", action='store_true')
     return parser.parse_args()
 
 
@@ -77,21 +78,24 @@ def main(args):
         args.data_dir,
         args.seq_len,
         args.flatten,
-        args.return_labels
+        args.return_labels,
+        args.load_all
     )
     eval_dataset = TransactionData(
         dataset.data[lengths[0]: lengths[0] + lengths[1]],
         args.data_dir,
         args.seq_len,
         args.flatten,
-        args.return_labels
+        args.return_labels,
+        args.load_all
     )
     test_dataset = TransactionData(
         dataset.data[lengths[0] + lengths[1]:],
         args.data_dir,
         args.seq_len,
         args.flatten,
-        args.return_labels
+        args.return_labels,
+        args.load_all
     )
     # train_dataset, eval_dataset, test_dataset = random_split_dataset(dataset, lengths)
 
