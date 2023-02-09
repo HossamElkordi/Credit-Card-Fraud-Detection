@@ -56,6 +56,9 @@ class Data(Dataset):
     def __len__(self):
         return len(self.data)
 
+    def sort(self):
+        self.data = sorted(self.data)
+
     def encode_data(self):
         if os.path.exists(os.path.join(self.data_dir, f'PreProcessed/data.pkl')):
             return

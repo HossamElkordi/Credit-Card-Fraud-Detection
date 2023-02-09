@@ -4,10 +4,11 @@ import random
 import argparse
 import numpy as np
 from Scripts.data import Data
-from Scripts.tabformer_models import TabFormerBertLM
 from Scripts.utils import random_split_dataset
+from Scripts.tab_former_dl import CustomTrainer
+from Scripts.tabformer_models import TabFormerBertLM
 from Scripts.datacollator import TransDataCollatorForLanguageModeling
-from transformers import DataCollatorForLanguageModeling, Trainer, TrainingArguments, ProgressCallback
+from transformers import DataCollatorForLanguageModeling, TrainingArguments, ProgressCallback
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -88,7 +89,7 @@ def main(args):
         disable_tqdm=False,
         load_best_model_at_end=True
     )
-    trainer = Trainer(
+    trainer = CustomTrainer(
         model=model.model,
         args=training_args,
         data_collator=data_collator,
