@@ -98,7 +98,7 @@ def main(args):
 
     model_path = os.path.join(args.model_dir, 'checkpoints')
     training_args = TrainingArguments(
-        output_dir=model_path,
+        output_dir='/content/kdrive/MyDrive/IBM_Dataset/checkpoints',
         num_train_epochs=args.epochs,
         save_steps=args.save_step,
         do_train=args.do_train,
