@@ -33,12 +33,14 @@ class TransactionData(Dataset):
                 self.current_user_label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
         
         if self.flatten:
-            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long)
+            return_data = torch.tensor(self.current_user_data[window_id-1], dtype=torch.long)
         else:
-            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long).reshape(self.seq_len, -1)
-
+            try:
+                return_data = torch.tensor(self.current_user_data[window_id-1], dtype=torch.long).reshape(self.seq_len, -1)
+            except:
+                print(window_id, user_id)
         if self.return_labels:
-            return_data = (return_data, torch.tensor(self.current_user_label[window_id], dtype=torch.long))
+            return_data = (return_data, torch.tensor(self.current_user_label[window_id-1], dtype=torch.long))
 
         return return_data
 
@@ -46,7 +48,9 @@ class TransactionData(Dataset):
         return len(self.data)
 
 class Data():
-    def __init__(self, data_dir='./Data', model_dir='./Models', seq_len=10, stride=5, nbins=10, adap_threshold=10**8, return_labels=False, skip_user=False, flatten=False):
+    def __init__(self, data_dir='./Data', model_dir='./Models', seq_len=10, stride=5, 
+                nbins=10, adap_threshold=10**8, return_labels=False, 
+                skip_user=False, flatten=False, ids=None):
         self.data_dir = data_dir
         self.model_dir = model_dir
         self.seq_len = seq_len
@@ -62,7 +66,7 @@ class Data():
         self.vocab = Vocabulary(adap_thres=adap_threshold)
         self.encode_data()
         self.init_vocab()
-        self.prepare_samples()
+        self.prepare_samples(ids)
         self.save_vocab()
 
     def encode_data(self):
@@ -162,13 +166,22 @@ class Data():
     def save_vocab(self):
         file_name = os.path.join(self.model_dir, 'vocab.nb')
         self.vocab.save_vocab(file_name)
-
-    def prepare_samples(self):
+    
+    def select_ids(self, ids):
+        new_data = []
+        for user_id, window_id in self.data:
+            if user_id in ids:
+                new_data.append([user_id, window_id])
+        return new_data
+    
+    def prepare_samples(self, ids=None):
         trans_path = os.path.join(self.data_dir, 'trans_data.pkl')
         data_path = os.path.join(self.data_dir, f'PreProcessed/data.pkl')
         
         if os.path.exists(data_path):
             self.data = joblib.load(data_path)
+            if ids:
+                self.data = self.select_ids(ids)
             self.ncols = len(self.vocab.field_keys) - 2 + 1
             return
         if os.path.exists(trans_path):
@@ -197,8 +210,8 @@ class Data():
                     user_dict[global_id] = ids
                     ids = user_labels[jdx:(jdx + self.seq_len)]
                     label_dict[global_id] = ids
-                    global_id += 1
                     self.data.append([user_idx, global_id])
+                    global_id += 1
                 joblib.dump(user_dict, os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{user_idx}.pkl'))
                 joblib.dump(label_dict, os.path.join(self.data_dir, f'PreProcessed/User_Labels/{user_idx}.pkl'))
                 user_idx += 1
