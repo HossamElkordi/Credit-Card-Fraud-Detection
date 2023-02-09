@@ -73,7 +73,7 @@ def main(args):
         args.flatten,
         args.return_labels
     )
-    train_dataset = TransactionData(
+    test_dataset = TransactionData(
         dataset.data[lengths[0] + lengths[1]:],
         args.data_dir,
         args.seq_len,
