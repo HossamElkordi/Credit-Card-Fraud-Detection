@@ -3,7 +3,7 @@ import torch
 import random
 import argparse
 import numpy as np
-from Scripts.data import Data
+from Scripts.data import Data, TransactionData
 from Scripts.utils import random_split_dataset
 from Scripts.tab_former_dl import CustomTrainer
 from Scripts.tabformer_models import TabFormerBertLM
@@ -59,7 +59,28 @@ def main(args):
     valN = int(valtestN * 0.5)
     testN = valtestN - valN
     lengths = [trainN, valN, testN]
-    train_dataset, eval_dataset, test_dataset = random_split_dataset(dataset, lengths)
+    train_dataset = TransactionData(
+        dataset.data[:lengths[0]],
+        args.data_dir,
+        args.seq_len,
+        args.flatten,
+        args.return_labels
+    )
+    eval_dataset = TransactionData(
+        dataset.data[lengths[0]: lengths[0] + lengths[1]],
+        args.data_dir,
+        args.seq_len,
+        args.flatten,
+        args.return_labels
+    )
+    train_dataset = TransactionData(
+        dataset.data[lengths[0] + lengths[1]:],
+        args.data_dir,
+        args.seq_len,
+        args.flatten,
+        args.return_labels
+    )
+    # train_dataset, eval_dataset, test_dataset = random_split_dataset(dataset, lengths)
 
     model = TabFormerBertLM(
         special_tokens=custom_special_tokens,

@@ -34,10 +34,6 @@ def random_split_dataset(dataset, lengths, random_seed=20200706):
     if torch.cuda.is_available():
         torch.cuda.set_rng_state(state['seeds']['cuda_state'])
 
-    train_dataset.sort()
-    eval_dataset.sort()
-    test_dataset.sort()
-
     return train_dataset, eval_dataset, test_dataset
 
 

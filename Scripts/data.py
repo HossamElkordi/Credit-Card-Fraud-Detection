@@ -12,7 +12,40 @@ from Scripts.utils import divide_chunks
 from torch.utils.data.dataset import Dataset
 from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 
-class Data(Dataset):
+class TransactionData(Dataset):
+    def __init__(self, data_list, data_dir, seq_len, flatten, return_labels) -> None:
+        super().__init__()
+        self.data_dir = data_dir
+        self.flatten = flatten
+        self.return_labels = return_labels
+        self.seq_len = seq_len
+        self.data = data_list
+        self.current_id = -1
+        self.current_user_data = None
+        self.current_user_label = None
+
+    def __getitem__(self, index):
+        user_id, window_id = self.data[index]
+        if user_id != self.current_id:
+            self.current_id = user_id
+            self.current_user_data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
+            if self.return_labels:
+                self.current_user_label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
+        
+        if self.flatten:
+            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long)
+        else:
+            return_data = torch.tensor(self.current_user_data[window_id], dtype=torch.long).reshape(self.seq_len, -1)
+
+        if self.return_labels:
+            return_data = (return_data, torch.tensor(self.current_user_label[window_id], dtype=torch.long))
+
+        return return_data
+
+    def __len__(self):
+        return len(self.data)
+
+class Data():
     def __init__(self, data_dir='./Data', model_dir='./Models', seq_len=10, stride=5, nbins=10, adap_threshold=10**8, return_labels=False, skip_user=False, flatten=False):
         self.data_dir = data_dir
         self.model_dir = model_dir
@@ -55,9 +88,6 @@ class Data(Dataset):
 
     def __len__(self):
         return len(self.data)
-
-    def sort(self):
-        self.data = sorted(self.data)
 
     def encode_data(self):
         if os.path.exists(os.path.join(self.data_dir, f'PreProcessed/data.pkl')):
