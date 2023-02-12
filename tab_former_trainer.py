@@ -34,6 +34,8 @@ def get_args():
     parser.add_argument("--do_train", action='store_true')
     parser.add_argument("--do_eval", action='store_true')
     parser.add_argument("--load_all", action='store_true')
+    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--weight_decay", type=float, default=0.0)
     return parser.parse_args()
 
 
@@ -122,15 +124,13 @@ def main(args):
     val_loader = DataLoader(eval_dataset, batch_size=8, shuffle=False, sampler=None, num_workers=2, collate_fn=data_collator)
 
     optimizer = AdamW(model.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    model, optim, start_epoch, start_step, prev_val_loss = load_model(
+    model.model, optimizer, start_epoch, start_step, prev_val_loss = load_model(
         os.path.join(args.save_dir, f'tabformer_epoch{args.start_epoch}_step{args.start_step}.pth'), 
         model.model, 
         optimizer
     )
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    train(model.model.to(device), optim, start_step, start_epoch, args.epochs, train_loader, val_loader, prev_val_loss, args.save_dir, device)
-
+    train(model.model.to(device), optimizer, start_step, args.save_step, start_epoch, args.epochs, train_loader, val_loader, prev_val_loss, args.save_dir, device)
 
 
 # def main(args):

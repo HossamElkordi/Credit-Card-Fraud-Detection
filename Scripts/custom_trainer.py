@@ -18,10 +18,11 @@ def train_step(model, dataloader, val_loader, optimizer, epoch, step, device, sa
     model.train()
     running_loss = 0.0
     with tqdm(desc='Train: Epoch %d' % epoch, unit='it', total=len(dataloader)) as pbar:
-        for it in range(step, len(dataloader)):
+        for it, x in enumerate(dataloader):
+            if it < step:
+                continue
             optimizer.zero_grad()
-            x = dataloader[it].to(device)
-            loss, _ = model(x)
+            loss, _ = model(x['input_ids'].to(device), masked_lm_labels=x['masked_lm_labels'].to(device))
             running_loss += loss.item()
             loss.backward()
             optimizer.step()
@@ -37,9 +38,9 @@ def val_step(model, dataloader, epoch, device):
     model.eval()
     running_loss = 0.0
     with tqdm(desc='Val: Epoch %d' % epoch, unit='it', total=len(dataloader)) as pbar:
-        for it, (_, x) in enumerate(dataloader):
+        for it, x in enumerate(dataloader):
             x = x.to(device)
-            loss, _ = model(x)
+            loss, _ = model(x['input_ids'].to(device), masked_lm_labels=x['masked_lm_labels'].to(device))
             running_loss += loss.item()
             pbar.set_postfix(loss=running_loss / (it + 1))
             pbar.update()
