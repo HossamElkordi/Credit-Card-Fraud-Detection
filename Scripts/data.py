@@ -33,9 +33,10 @@ class TransactionData(Dataset):
                 label = None
             for u_id, w_id in self.data:
                 if u_id != cur:
-                    data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{self.current_id}.pkl'))
+                    cur = u_id
+                    data = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Transactions/{cur}.pkl'))
                     if self.return_labels:
-                        label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{self.current_id}.pkl'))
+                        label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{cur}.pkl'))
                 if u_id not in self.data_dict.keys():
                     self.data_dict[u_id] = {}
                 self.data_dict[u_id][w_id] = data[w_id - 1]
