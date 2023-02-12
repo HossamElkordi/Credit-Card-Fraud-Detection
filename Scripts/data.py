@@ -39,11 +39,11 @@ class TransactionData(Dataset):
                         label = joblib.load(os.path.join(self.data_dir, f'PreProcessed/User_Labels/{cur}.pkl'))
                 if u_id not in self.data_dict.keys():
                     self.data_dict[u_id] = {}
-                self.data_dict[u_id][w_id] = data[w_id - 1]
+                self.data_dict[u_id][w_id] = data[w_id]
                 if self.return_labels:
                     if u_id not in self.label_dict.keys():
                         self.label_dict[u_id] = {}
-                    self.label_dict[u_id][w_id] = label[w_id - 1]
+                    self.label_dict[u_id][w_id] = label[w_id]
 
 
     def __getitem__(self, index):
@@ -57,7 +57,7 @@ class TransactionData(Dataset):
         if self.load_all:
             return_data = self.data_dict[user_id][window_id]
         else:
-            return_data = self.current_user_data[window_id-1]
+            return_data = self.current_user_data[window_id]
         if self.flatten:
             return_data = torch.tensor(return_data, dtype=torch.long)
         else:
@@ -69,7 +69,7 @@ class TransactionData(Dataset):
             if self.load_all:
                 return_data = (return_data, torch.tensor(self.label_dict[user_id][window_id], dtype=torch.long))
             else:
-                return_data = (return_data, torch.tensor(self.current_user_label[window_id-1], dtype=torch.long))
+                return_data = (return_data, torch.tensor(self.current_user_label[window_id], dtype=torch.long))
 
         return return_data
 
@@ -93,12 +93,12 @@ class Data():
         self.labels = []
         self.window_label = []
         self.vocab = Vocabulary(adap_thres=adap_threshold)
-        self.encode_data()
+        self.encode_data(ids)
         self.init_vocab()
         self.prepare_samples(ids)
         self.save_vocab()
 
-    def encode_data(self):
+    def encode_data(self, ids=None):
         if os.path.exists(os.path.join(self.data_dir, f'PreProcessed/data.pkl')):
             return
         data_prep_path = os.path.join(self.model_dir, 'data_prep.pkl')
@@ -122,6 +122,7 @@ class Data():
             return
         
         df = pd.read_csv(os.path.join(self.data_dir, 'transactions.csv'))
+        df = df[df['User'].isin(ids)]
 
         df['Zip'] = df['Zip'].fillna(0).astype(int)
         num8_col = ['Card', 'Month', 'Day']
@@ -225,7 +226,7 @@ class Data():
             os.mkdir(os.path.join(self.data_dir, f'PreProcessed/User_Labels'))
 
         user_idx = 0
-        with tqdm(total=len(trans_data)) as pbar:
+        with tqdm(total=len(trans_data), desc='Transaction Windows') as pbar:
             while len(trans_data) > 0:
                 global_id = 0
                 user_dict = {}
@@ -308,7 +309,7 @@ class Data():
     def timeEncoder(X):
         X_hm = X['Time'].str.split(':', expand=True)
         d = pd.to_numeric(pd.to_datetime(dict(year=X['Year'], month=X['Month'], day=X['Day'], hour=X_hm[0], minute=X_hm[1]))).astype(int)
-        return d
+        return pd.DataFrame(d)
 
     @staticmethod
     def amountEncoder(X):

@@ -210,7 +210,7 @@ class TabFormerBertForMaskedLM(BertForMaskedLM):
             masked_lm_loss_field = loss_fct(prediction_scores_field.view(-1, len(global_ids_field)),
                                             masked_lm_labels_field_local.view(-1))
 
-            total_masked_lm_loss += masked_lm_loss_field
+            total_masked_lm_loss += 0.0 if torch.isnan(masked_lm_loss_field) else masked_lm_loss_field
 
         return (total_masked_lm_loss,) + outputs
 
