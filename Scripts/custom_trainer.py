@@ -39,7 +39,6 @@ def val_step(model, dataloader, epoch, device):
     running_loss = 0.0
     with tqdm(desc='Val: Epoch %d' % epoch, unit='it', total=len(dataloader)) as pbar:
         for it, x in enumerate(dataloader):
-            x = x.to(device)
             loss, _ = model(x['input_ids'].to(device), masked_lm_labels=x['masked_lm_labels'].to(device))
             running_loss += loss.item()
             pbar.set_postfix(loss=running_loss / (it + 1))
